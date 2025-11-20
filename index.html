@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodle Question Uploader v4</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .sidebar {
+            position: fixed;
+            right: -380px;
+            top: 0;
+            width: 380px;
+            height: 100vh;
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        .sidebar.open {
+            right: 0;
+        }
+        .question-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .question-card:hover {
+            background: #eef2ff;
+            border-color: #6366f1;
+            transform: translateX(-4px);
+        }
+        .question-card.selected {
+            background: #eef2ff;
+            border-color: #6366f1;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Simple SVG icon components
+        const Upload = () => (
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+        );
+
+        const Edit = () => (
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        );
+
+        const List = () => (
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </svg>
+        );
+
+        const ChevronRight = ({ className }) => (
+          <svg className={className} width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
+        );
+
+        const ChevronLeft = ({ className }) => (
+          <svg className={className} width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        );
+
+        const Download = ({ className }) => (
+          <svg className={className} width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        );
+
+        const X = ({ className }) => (
+          <svg className={className} width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        );
+
+        const Plus = ({ className }) => (
+          <svg className={className} width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+          </svg>
+        );
+
+        const ArrowLeft = ({ className }) => (
+          <svg className={className} width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+        );
+
+        const IMG_BASE_URL = 'https://7b54506350adb640d68ffd2c6a763064-11784.sites.k-hosting.co.uk/pluginfile.php/1179/mod_folder/content/0/';
+
+        const topicsData = {
+          "Paper 1": {
+            "Particles and Waves": { "subTopic1List": ["Particles", "Electromagnetic radiation and quantum phenomena", "Progressive and stationary waves", "Refraction, diffraction and interference"] },
+            "Mechanics and Materials": { "subTopic1List": ["Force and Moments", "Motion", "Newton's Laws and Momentum", "Work, Energy and Power", "Materials"] },
+            "Electricity": { "subTopic1List": ["Resistivity", "Potential divider and internal resistance", "General Electricity"] },
+            "Further Mechanics": { "subTopic1List": ["Circular motion", "Simple Harmonic Motion (SHM)"] }
+          },
+          "Paper 2": {
+            "Thermal Physics": { "subTopic1List": ["Specific Heat Capacity (SHC) and Latent Heat (LH)", "Ideal gases", "Kinetic theory"] },
+            "Gravitational Fields": { "subTopic1List": ["Newton's Laws and Field Strength", "Gravitational Potential", "Orbits"] },
+            "Electric Fields": { "subTopic1List": ["Coulomb's Law and Field Strength", "Electric Potential"] },
+            "Capacitance": { "subTopic1List": ["Capacitance and the Capacitor", "Energy stored in a capacitor", "Charge and Discharge of capacitors"] },
+            "Magnetic Fields": { "subTopic1List": ["Force on Charge/Conductor", "Electromagnetic Induction", "Alternating currents (AC)", "Transformers"] },
+            "Nuclear Physics": { "subTopic1List": ["Rutherford scattering, and alpha, beta, gamma radiation", "Radioactive decay and Nuclear instability", "Mass and energy, Fission, Fusion and Safety"] }
+          }
+        };
+
+        function App() {
+          const [mode, setMode] = useState('select');
+          const [questions, setQuestions] = useState([]);
+          const [bulkStage, setBulkStage] = useState('upload');
+          const [bulkImages, setBulkImages] = useState([]);
+          const [globalMetadata, setGlobalMetadata] = useState({
+            paper: '',
+            mainTopic: '',
+            subTopic1: ''
+          });
+
+          const renderMode = () => {
+            switch (mode) {
+              case 'select':
+                return <ModeSelector setMode={setMode} />;
+              case 'single':
+                return <SingleQuestionMode questions={questions} setQuestions={setQuestions} setMode={setMode} />;
+              case 'bulk':
+                return <BulkMode 
+                  questions={questions} 
+                  setQuestions={setQuestions} 
+                  setMode={setMode}
+                  bulkStage={bulkStage}
+                  setBulkStage={setBulkStage}
+                  bulkImages={bulkImages}
+                  setBulkImages={setBulkImages}
+                  globalMetadata={globalMetadata}
+                  setGlobalMetadata={setGlobalMetadata}
+                />;
+              case 'edit':
+                return <EditMode questions={questions} setQuestions={setQuestions} setMode={setMode} />;
+              default:
+                return <ModeSelector setMode={setMode} />;
+            }
+          };
+
+          return (
+            <div className="min-h-screen bg-gray-100">
+              {renderMode()}
+            </div>
+          );
+        }
+
+        function ModeSelector({ setMode }) {
+          const modes = [
+            {
+              id: 'single',
+              title: 'Question by Question',
+              description: 'Add questions one at a time with full control',
+              icon: <Edit />,
+              color: 'from-blue-500 to-blue-600'
+            },
+            {
+              id: 'bulk',
+              title: 'Bulk Upload',
+              description: 'Upload multiple images and add metadata in a table',
+              icon: <Upload />,
+              color: 'from-green-500 to-green-600'
+            },
+            {
+              id: 'edit',
+              title: 'Edit Existing',
+              description: 'Import XML file and edit questions',
+              icon: <List />,
+              color: 'from-purple-500 to-purple-600'
+            }
+          ];
+
+          return (
+            <div className="container mx-auto px-4 py-12">
+              <div className="max-w-5xl mx-auto">
+                <h1 className="text-4xl font-bold text-gray-800 text-center mb-4">Moodle Question Uploader</h1>
+                <p className="text-gray-600 text-center mb-12">Choose your workflow</p>
+                
+                <div className="grid md:grid-cols-3 gap-6">
+                  {modes.map((modeOption) => (
+                    <button
+                      key={modeOption.id}
+                      onClick={() => setMode(modeOption.id)}
+                      className="group relative overflow-hidden rounded-xl bg-white p-8 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                    >
+                      <div className={`absolute inset-0 bg-gradient-to-br ${modeOption.color} opacity-0 group-hover:opacity-10 transition-opacity`}></div>
+                      <div className="relative">
+                        <div className={`inline-flex p-3 rounded-lg bg-gradient-to-br ${modeOption.color} text-white mb-4`}>
+                          {modeOption.icon}
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">{modeOption.title}</h3>
+                        <p className="text-gray-600 text-sm">{modeOption.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        function SingleQuestionMode({ questions, setQuestions, setMode }) {
+          const [currentQuestion, setCurrentQuestion] = useState({
+            image: null,
+            imageDataUrl: '',
+            correctAnswer: '',
+            week: '',
+            year: '',
+            paper: '',
+            mainTopic: '',
+            subTopic1: '',
+            subTopic2: ''
+          });
+          const [editingId, setEditingId] = useState(null);
+          const [showSidebar, setShowSidebar] = useState(false);
+          const [selectedQuestionId, setSelectedQuestionId] = useState(null);
+          const fileInputRef = useRef(null);
+
+          const handleImageUpload = (file) => {
+            if (file && file.type.startsWith('image/')) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                setCurrentQuestion(prev => ({
+                  ...prev,
+                  image: file,
+                  imageDataUrl: e.target.result
+                }));
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+
+          const handlePaste = (e) => {
+            const items = e.clipboardData.items;
+            for (let item of items) {
+              if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                handleImageUpload(file);
+                e.preventDefault();
+                break;
+              }
+            }
+          };
+
+          useEffect(() => {
+            document.addEventListener('paste', handlePaste);
+            return () => document.removeEventListener('paste', handlePaste);
+          }, []);
+
+          const getSortedQuestions = () => {
+            return [...questions].sort((a, b) => {
+              if (a.week !== b.week) return parseInt(a.week) - parseInt(b.week);
+              return parseInt(a.idnumber) - parseInt(b.idnumber);
+            });
+          };
+
+          const getCurrentQuestionIndex = () => {
+            if (!selectedQuestionId) return -1;
+            const sorted = getSortedQuestions();
+            return sorted.findIndex(q => q.id === selectedQuestionId);
+          };
+
+          const navigateToPreviousQuestion = () => {
+            const currentIndex = getCurrentQuestionIndex();
+            if (currentIndex > 0) {
+              const sorted = getSortedQuestions();
+              selectQuestion(sorted[currentIndex - 1].id);
+            }
+          };
+
+          const navigateToNextQuestion = () => {
+            const currentIndex = getCurrentQuestionIndex();
+            const sorted = getSortedQuestions();
+            if (currentIndex < sorted.length - 1) {
+              selectQuestion(sorted[currentIndex + 1].id);
+            }
+          };
+
+          const handleSubmit = () => {
+            if (!currentQuestion.image) {
+              alert('Please add an image');
+              return;
+            }
+
+            if (!currentQuestion.correctAnswer || !currentQuestion.week || !currentQuestion.year || 
+                !currentQuestion.paper || !currentQuestion.mainTopic || !currentQuestion.subTopic1) {
+              alert('Please fill in all required fields');
+              return;
+            }
+
+            const timestamp = Math.floor(Date.now() / 1000);
+            const fileExtension = currentQuestion.image.name.split('.').pop() || 'png';
+            const fileName = `${timestamp}.${fileExtension}`;
+
+            const newQuestion = {
+              id: Date.now(),
+              idnumber: timestamp.toString(),
+              generatedImageFileName: fileName,
+              imgUrl: IMG_BASE_URL + fileName,
+              imageDataUrl: currentQuestion.imageDataUrl,
+              imageBase64: currentQuestion.imageDataUrl.split(',')[1],
+              originalImageFileName: currentQuestion.image.name,
+              correctAnswer: currentQuestion.correctAnswer,
+              week: currentQuestion.week,
+              year: currentQuestion.year,
+              paper: currentQuestion.paper,
+              mainTopic: currentQuestion.mainTopic,
+              subTopic1: currentQuestion.subTopic1,
+              subTopic2: currentQuestion.subTopic2 || ''
+            };
+
+            if (editingId) {
+              setQuestions(prev => prev.map(q => q.id === editingId ? { ...newQuestion, id: editingId, idnumber: q.idnumber } : q));
+              setEditingId(null);
+              setSelectedQuestionId(null);
+            } else {
+              setQuestions(prev => [...prev, newQuestion]);
+            }
+
+            setCurrentQuestion(prev => ({
+              ...prev,
+              image: null,
+              imageDataUrl: '',
+              correctAnswer: ''
+            }));
+          };
+
+          const selectQuestion = (questionId) => {
+            setSelectedQuestionId(questionId);
+            const question = questions.find(q => q.id === questionId);
+            
+            if (question) {
+              setCurrentQuestion({
+                image: { name: question.originalImageFileName },
+                imageDataUrl: question.imageDataUrl,
+                correctAnswer: question.correctAnswer,
+                week: question.week,
+                year: question.year,
+                paper: question.paper,
+                mainTopic: question.mainTopic,
+                subTopic1: question.subTopic1,
+                subTopic2: question.subTopic2
+              });
+              setEditingId(question.id);
+              setShowSidebar(false);
+            }
+          };
+
+          const downloadXML = () => {
+            const xmlContent = generateMoodleXML(questions);
+            const blob = new Blob([xmlContent], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'questions.xml';
+            a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          const questionsByWeek = questions.reduce((acc, q) => {
+            if (!acc[q.week]) acc[q.week] = [];
+            acc[q.week].push(q);
+            return acc;
+          }, {});
+
+          const currentIndex = getCurrentQuestionIndex();
+          const totalQuestions = questions.length;
+
+          return (
+            <div className="relative min-h-screen">
+              <button
+                onClick={() => setMode('select')}
+                className="fixed top-4 left-4 z-50 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+
+              <button
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="fixed top-4 right-4 z-50 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+              >
+                {showSidebar ? 'Hide' : 'Show'} Questions ({questions.length})
+              </button>
+
+              <div className={`sidebar ${showSidebar ? 'open' : ''}`}>
+                <div className="p-6 border-b bg-gray-50">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-gray-800">Questions</h3>
+                    <button onClick={() => setShowSidebar(false)} className="text-gray-500 hover:text-gray-700">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6">
+                  {questions.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No questions uploaded yet</p>
+                  ) : (
+                    <div>
+                      {Object.keys(questionsByWeek).sort((a, b) => parseInt(a) - parseInt(b)).map(week => (
+                        <div key={week} className="mb-4">
+                          <h4 className="font-semibold text-gray-700 mb-2 px-2">
+                            Week {week} ({questionsByWeek[week].length} questions)
+                          </h4>
+                          {questionsByWeek[week]
+                            .sort((a, b) => parseInt(a.idnumber) - parseInt(b.idnumber))
+                            .map(q => (
+                              <div
+                                key={q.id}
+                                onClick={() => selectQuestion(q.id)}
+                                className={`question-card ${selectedQuestionId === q.id ? 'selected' : ''}`}
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm">ID {q.idnumber} - {q.paper}</p>
+                                    <p className="text-xs text-gray-600 mt-1">{q.mainTopic}</p>
+                                    <p className="text-xs text-indigo-600 font-medium mt-1">Answer: {q.correctAnswer}</p>
+                                  </div>
+                                  <div className="text-xs text-gray-400">{q.year}</div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {questions.length > 0 && (
+                    <button
+                      onClick={downloadXML}
+                      className="w-full mt-6 bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" /> Download XML
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="container mx-auto px-4 py-12 max-w-3xl">
+                <h2 className="text-3xl font-bold text-gray-800 mb-8">Add Question</h2>
+
+                {/* Current Question Status */}
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={navigateToPreviousQuestion}
+                      disabled={currentIndex <= 0 || !selectedQuestionId}
+                      className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full p-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="text-center flex-1">
+                      {editingId && selectedQuestionId ? (
+                        <div>
+                          <div className="font-bold">
+                            Editing: Week {currentQuestion.week}, ID {questions.find(q => q.id === editingId)?.idnumber}
+                          </div>
+                          <div className="text-sm mt-1 opacity-90">
+                            Question {currentIndex + 1} of {totalQuestions}
+                          </div>
+                        </div>
+                      ) : currentQuestion.week ? (
+                        <div>
+                          <div className="font-bold">Ready to add question for Week {currentQuestion.week}</div>
+                          <div className="text-sm mt-1 opacity-90">
+                            Total questions in Week {currentQuestion.week}: {questionsByWeek[currentQuestion.week]?.length || 0}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="font-bold">Ready to add questions</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={navigateToNextQuestion}
+                      disabled={currentIndex >= totalQuestions - 1 || !selectedQuestionId}
+                      className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full p-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-lg p-8 space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Question Image *</label>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e.target.files[0])}
+                        className="hidden"
+                      />
+                      {currentQuestion.imageDataUrl ? (
+                        <img src={currentQuestion.imageDataUrl} alt="Preview" className="max-h-48 mx-auto rounded" />
+                      ) : (
+                        <div>
+                          <div className="inline-block"><Upload /></div>
+                          <p className="text-gray-600 mt-2">Click to upload or paste image (Ctrl/Cmd + V)</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer *</label>
+                    <div className="flex gap-4">
+                      {['A', 'B', 'C', 'D'].map(option => (
+                        <label key={option} className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            name="correctAnswer"
+                            value={option}
+                            checked={currentQuestion.correctAnswer === option}
+                            onChange={(e) => setCurrentQuestion(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                            className="mr-2"
+                          />
+                          <span className="font-medium">{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Week *</label>
+                      <input
+                        type="number"
+                        value={currentQuestion.week}
+                        onChange={(e) => setCurrentQuestion(prev => ({ ...prev, week: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Year *</label>
+                      <input
+                        type="number"
+                        value={currentQuestion.year}
+                        onChange={(e) => setCurrentQuestion(prev => ({ ...prev, year: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <TopicSelectors
+                    currentQuestion={currentQuestion}
+                    setCurrentQuestion={setCurrentQuestion}
+                  />
+
+                  <button
+                    onClick={handleSubmit}
+                    className={`w-full ${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-6 py-3 rounded-lg font-semibold transition-colors`}
+                  >
+                    {editingId ? 'Update Question' : 'Add Question'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // [REST OF THE CODE - BulkMode, BulkImageUpload, BulkMetadataEntry, BulkPreview, EditMode, TopicSelectors, and generateMoodleXML functions remain exactly the same as in the previous version]
+
+        function BulkMode({ questions, setQuestions, setMode, bulkStage, setBulkStage, bulkImages, setBulkImages, globalMetadata, setGlobalMetadata }) {
+          const renderStage = () => {
+            switch (bulkStage) {
+              case 'upload':
+                return <BulkImageUpload bulkImages={bulkImages} setBulkImages={setBulkImages} setBulkStage={setBulkStage} />;
+              case 'metadata':
+                return <BulkMetadataEntry 
+                  bulkImages={bulkImages} 
+                  setBulkStage={setBulkStage} 
+                  setQuestions={setQuestions}
+                  globalMetadata={globalMetadata}
+                  setGlobalMetadata={setGlobalMetadata}
+                />;
+              case 'preview':
+                return <BulkPreview questions={questions} setBulkStage={setBulkStage} setMode={setMode} />;
+              default:
+                return null;
+            }
+          };
+
+          return (
+            <div>
+              <button
+                onClick={() => {
+                  if (bulkStage === 'upload') {
+                    setMode('select');
+                  } else {
+                    setBulkStage('upload');
+                    setBulkImages([]);
+                  }
+                }}
+                className="fixed top-4 left-4 z-50 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+              {renderStage()}
+            </div>
+          );
+        }
+
+        function BulkImageUpload({ bulkImages, setBulkImages, setBulkStage }) {
+          const [currentImage, setCurrentImage] = useState(null);
+          const fileInputRef = useRef(null);
+
+          const handleImageUpload = (file) => {
+            if (file && file.type.startsWith('image/')) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                setCurrentImage({
+                  file,
+                  dataUrl: e.target.result,
+                  name: file.name
+                });
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+
+          const handlePaste = (e) => {
+            const items = e.clipboardData.items;
+            for (let item of items) {
+              if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                handleImageUpload(file);
+                e.preventDefault();
+                break;
+              }
+            }
+          };
+
+          useEffect(() => {
+            document.addEventListener('paste', handlePaste);
+            return () => document.removeEventListener('paste', handlePaste);
+          }, []);
+
+          const addCurrentImage = () => {
+            if (currentImage) {
+              setBulkImages(prev => [...prev, currentImage]);
+              setCurrentImage(null);
+            }
+          };
+
+          const removeImage = (index) => {
+            setBulkImages(prev => prev.filter((_, i) => i !== index));
+          };
+
+          const proceed = () => {
+            if (bulkImages.length > 0) {
+              setBulkStage('metadata');
+            } else {
+              alert('Please add at least one image');
+            }
+          };
+
+          return (
+            <div className="container mx-auto px-4 py-12 max-w-6xl">
+              <h2 className="text-3xl font-bold text-gray-800 mb-8">Bulk Image Upload</h2>
+
+              <div className="grid md:grid-cols-2 gap-8">
+                <div className="bg-white rounded-xl shadow-lg p-8">
+                  <h3 className="text-xl font-bold mb-4">Add Image</h3>
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors mb-4"
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e.target.files[0])}
+                      className="hidden"
+                    />
+                    {currentImage ? (
+                      <img src={currentImage.dataUrl} alt="Preview" className="max-h-64 mx-auto rounded" />
+                    ) : (
+                      <div>
+                        <div className="inline-block mb-4"><Upload /></div>
+                        <p className="text-gray-600 text-lg font-medium">Click to upload or paste image</p>
+                        <p className="text-gray-500 text-sm mt-2">(Ctrl/Cmd + V)</p>
+                      </div>
+                    )}
+                  </div>
+                  {currentImage && (
+                    <button
+                      onClick={addCurrentImage}
+                      className="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-5 h-5" /> Add to List
+                    </button>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-xl shadow-lg p-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold">Images Added ({bulkImages.length})</h3>
+                    {bulkImages.length > 0 && (
+                      <button
+                        onClick={proceed}
+                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 flex items-center gap-2"
+                      >
+                        Continue <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  
+                  {bulkImages.length === 0 ? (
+                    <p className="text-gray-500 text-center py-12">No images added yet</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                      {bulkImages.map((img, idx) => (
+                        <div key={idx} className="relative group">
+                          <img src={img.dataUrl} alt={`Question ${idx + 1}`} className="w-full h-32 object-cover rounded-lg" />
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center">
+                            <button
+                              onClick={() => removeImage(idx)}
+                              className="opacity-0 group-hover:opacity-100 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="absolute top-2 left-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs font-bold">
+                            #{idx + 1}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        function BulkMetadataEntry({ bulkImages, setBulkStage, setQuestions, globalMetadata, setGlobalMetadata }) {
+          const [questionsData, setQuestionsData] = useState(
+            bulkImages.map((img, idx) => ({
+              id: idx,
+              image: img,
+              correctAnswer: '',
+              week: '',
+              year: '',
+              paper: '',
+              mainTopic: '',
+              subTopic1: '',
+              subTopic2: ''
+            }))
+          );
+
+          const updateQuestion = (id, field, value) => {
+            setQuestionsData(prev => prev.map(q => q.id === id ? { ...q, [field]: value } : q));
+          };
+
+          const applyGlobalToAll = () => {
+            setQuestionsData(prev => prev.map(q => ({
+              ...q,
+              paper: globalMetadata.paper || q.paper,
+              mainTopic: globalMetadata.mainTopic || q.mainTopic,
+              subTopic1: globalMetadata.subTopic1 || q.subTopic1
+            })));
+          };
+
+          const handleSubmit = () => {
+            const incomplete = questionsData.find(q => !q.correctAnswer || !q.week || !q.year || !q.paper || !q.mainTopic || !q.subTopic1);
+            if (incomplete) {
+              alert('Please fill in all required fields for all questions');
+              return;
+            }
+
+            const newQuestions = questionsData.map(q => {
+              const timestamp = Math.floor(Date.now() / 1000) + q.id;
+              const fileExtension = q.image.file.name.split('.').pop() || 'png';
+              const fileName = `${timestamp}.${fileExtension}`;
+
+              return {
+                id: Date.now() + q.id,
+                idnumber: timestamp.toString(),
+                generatedImageFileName: fileName,
+                imgUrl: IMG_BASE_URL + fileName,
+                imageDataUrl: q.image.dataUrl,
+                imageBase64: q.image.dataUrl.split(',')[1],
+                originalImageFileName: q.image.name,
+                correctAnswer: q.correctAnswer,
+                week: q.week,
+                year: q.year,
+                paper: q.paper,
+                mainTopic: q.mainTopic,
+                subTopic1: q.subTopic1,
+                subTopic2: q.subTopic2 || ''
+              };
+            });
+
+            setQuestions(prev => [...prev, ...newQuestions]);
+            setBulkStage('preview');
+          };
+
+          return (
+            <div className="container mx-auto px-4 py-12 max-w-7xl">
+              <h2 className="text-3xl font-bold text-gray-800 mb-8">Add Metadata</h2>
+
+              <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                <h3 className="text-lg font-bold mb-4">Global Settings (Optional)</h3>
+                <div className="grid md:grid-cols-3 gap-4 mb-4">
+                  <select
+                    value={globalMetadata.paper}
+                    onChange={(e) => {
+                      setGlobalMetadata({
+                        paper: e.target.value,
+                        mainTopic: '',
+                        subTopic1: ''
+                      });
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">Select Paper *</option>
+                    {Object.keys(topicsData).map(paper => (
+                      <option key={paper} value={paper}>{paper}</option>
+                    ))}
+                  </select>
+                  
+                  <select
+                    value={globalMetadata.mainTopic}
+                    onChange={(e) => {
+                      setGlobalMetadata(prev => ({
+                        ...prev,
+                        mainTopic: e.target.value,
+                        subTopic1: ''
+                      }));
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg"
+                    disabled={!globalMetadata.paper}
+                  >
+                    <option value="">Select Main Topic *</option>
+                    {globalMetadata.paper && Object.keys(topicsData[globalMetadata.paper] || {}).map(topic => (
+                      <option key={topic} value={topic}>{topic}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={globalMetadata.subTopic1}
+                    onChange={(e) => {
+                      setGlobalMetadata(prev => ({
+                        ...prev,
+                        subTopic1: e.target.value
+                      }));
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg"
+                    disabled={!globalMetadata.mainTopic}
+                  >
+                    <option value="">Select Sub Topic 1 *</option>
+                    {globalMetadata.paper && globalMetadata.mainTopic && 
+                     topicsData[globalMetadata.paper]?.[globalMetadata.mainTopic]?.subTopic1List.map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={applyGlobalToAll}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Apply to All Questions
+                </button>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-100 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">#</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Image</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Answer*</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Week*</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Year*</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Paper*</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Main Topic*</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Sub Topic 1*</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Sub Topic 2</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {questionsData.map((q, idx) => (
+                        <tr key={q.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{idx + 1}</td>
+                          <td className="px-4 py-3">
+                            <img src={q.image.dataUrl} alt="" className="w-20 h-16 object-cover rounded" />
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={q.correctAnswer}
+                              onChange={(e) => updateQuestion(q.id, 'correctAnswer', e.target.value)}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value="">-</option>
+                              {['A', 'B', 'C', 'D'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={q.week}
+                              onChange={(e) => updateQuestion(q.id, 'week', e.target.value)}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={q.year}
+                              onChange={(e) => updateQuestion(q.id, 'year', e.target.value)}
+                              className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={q.paper}
+                              onChange={(e) => updateQuestion(q.id, 'paper', e.target.value)}
+                              className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value="">-</option>
+                              {Object.keys(topicsData).map(paper => (
+                                <option key={paper} value={paper}>{paper}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={q.mainTopic}
+                              onChange={(e) => updateQuestion(q.id, 'mainTopic', e.target.value)}
+                              className="w-40 px-2 py-1 border border-gray-300 rounded text-sm"
+                              disabled={!q.paper}
+                            >
+                              <option value="">-</option>
+                              {q.paper && Object.keys(topicsData[q.paper] || {}).map(topic => (
+                                <option key={topic} value={topic}>{topic}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={q.subTopic1}
+                              onChange={(e) => updateQuestion(q.id, 'subTopic1', e.target.value)}
+                              className="w-48 px-2 py-1 border border-gray-300 rounded text-sm"
+                              disabled={!q.mainTopic}
+                            >
+                              <option value="">-</option>
+                              {q.paper && q.mainTopic && topicsData[q.paper]?.[q.mainTopic]?.subTopic1List.map(sub => (
+                                <option key={sub} value={sub}>{sub}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={q.subTopic2}
+                              onChange={(e) => updateQuestion(q.id, 'subTopic2', e.target.value)}
+                              className="w-48 px-2 py-1 border border-gray-300 rounded text-sm"
+                              disabled={!q.subTopic1}
+                            >
+                              <option value="">-</option>
+                              {q.paper && q.mainTopic && topicsData[q.paper]?.[q.mainTopic]?.subTopic1List
+                                .filter(sub => sub !== q.subTopic1)
+                                .map(sub => (
+                                  <option key={sub} value={sub}>{sub}</option>
+                                ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-between">
+                <button
+                  onClick={() => setBulkStage('upload')}
+                  className="bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Back to Images
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 flex items-center gap-2"
+                >
+                  Preview Questions <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        function BulkPreview({ questions, setBulkStage, setMode }) {
+          const downloadXML = () => {
+            const xmlContent = generateMoodleXML(questions);
+            const blob = new Blob([xmlContent], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'questions.xml';
+            a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          const questionsByWeek = questions.reduce((acc, q) => {
+            if (!acc[q.week]) acc[q.week] = [];
+            acc[q.week].push(q);
+            return acc;
+          }, {});
+
+          return (
+            <div className="container mx-auto px-4 py-12 max-w-6xl">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-bold text-gray-800">Preview Questions</h2>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setBulkStage('metadata')}
+                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                  >
+                    Edit Metadata
+                  </button>
+                  <button
+                    onClick={downloadXML}
+                    className="bg-amber-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-amber-700 flex items-center gap-2"
+                  >
+                    <Download className="w-5 h-5" /> Download XML
+                  </button>
+                </div>
+              </div>
+
+              {Object.keys(questionsByWeek).sort((a, b) => parseInt(a) - parseInt(b)).map(week => (
+                <div key={week} className="mb-8">
+                  <h3 className="text-2xl font-bold text-gray-700 mb-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-3 rounded-lg">
+                    Week {week} ({questionsByWeek[week].length} questions)
+                  </h3>
+                  <div className="space-y-4">
+                    {questionsByWeek[week].map((q, idx) => (
+                      <div key={q.id} className="bg-white rounded-lg shadow-lg p-6">
+                        <div className="flex gap-6">
+                          <div className="flex-shrink-0">
+                            <img src={q.imageDataUrl} alt="" className="w-64 rounded-lg" />
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            <div className="flex justify-between">
+                              <h4 className="text-xl font-bold text-gray-800">Question ID: {q.idnumber}</h4>
+                              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
+                                Answer: {q.correctAnswer}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <p><span className="font-semibold">Paper:</span> {q.paper}</p>
+                              <p><span className="font-semibold">Year:</span> {q.year}</p>
+                              <p className="col-span-2"><span className="font-semibold">Main Topic:</span> {q.mainTopic}</p>
+                              <p className="col-span-2"><span className="font-semibold">Sub Topic 1:</span> {q.subTopic1}</p>
+                              {q.subTopic2 && <p className="col-span-2"><span className="font-semibold">Sub Topic 2:</span> {q.subTopic2}</p>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        function EditMode({ questions, setQuestions, setMode }) {
+          const fileInputRef = useRef(null);
+
+          const handleFileUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const text = await file.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, 'text/xml');
+            
+            const questionElements = xmlDoc.getElementsByTagName('question');
+            const parsedQuestions = [];
+
+            for (let i = 0; i < questionElements.length; i++) {
+              const qEl = questionElements[i];
+              if (qEl.getAttribute('type') !== 'multichoice') continue;
+
+              const idnumber = qEl.getElementsByTagName('idnumber')[0]?.textContent || '';
+              const tags = Array.from(qEl.getElementsByTagName('tag')).map(t => t.textContent);
+              
+              const week = tags.find(t => t.startsWith('Week_'))?.replace('Week_', '') || '';
+              const year = tags.find(t => t.startsWith('Year_'))?.replace('Year_', '') || '';
+              const paper = tags.find(t => t.startsWith('Paper_'))?.replace('Paper_', 'Paper ') || '';
+              const mainTopic = tags.find(t => t.startsWith('MainTopic_'))?.replace('MainTopic_', '').replace(/_/g, ' ') || '';
+              const subTopics = tags.filter(t => t.startsWith('SubTopic_')).map(t => t.replace('SubTopic_', '').replace(/_/g, ' '));
+
+              const answers = qEl.getElementsByTagName('answer');
+              let correctAnswer = '';
+              for (let j = 0; j < answers.length; j++) {
+                if (answers[j].getAttribute('fraction') === '100') {
+                  correctAnswer = answers[j].getElementsByTagName('text')[0]?.textContent || '';
+                }
+              }
+
+              const fileEl = qEl.getElementsByTagName('file')[0];
+              const base64 = fileEl?.textContent?.trim() || '';
+              const fileName = fileEl?.getAttribute('name') || `${idnumber}.png`;
+              
+              if (base64) {
+                const mimeType = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
+                const dataUrl = `data:${mimeType};base64,${base64}`;
+
+                parsedQuestions.push({
+                  id: Date.now() + i,
+                  idnumber,
+                  generatedImageFileName: fileName,
+                  imgUrl: IMG_BASE_URL + fileName,
+                  imageDataUrl: dataUrl,
+                  imageBase64: base64,
+                  originalImageFileName: fileName,
+                  correctAnswer,
+                  week,
+                  year,
+                  paper,
+                  mainTopic,
+                  subTopic1: subTopics[0] || '',
+                  subTopic2: subTopics[1] || ''
+                });
+              }
+            }
+
+            setQuestions(parsedQuestions);
+            alert(`Loaded ${parsedQuestions.length} questions`);
+          };
+
+          return (
+            <div className="container mx-auto px-4 py-12 max-w-3xl">
+              <button
+                onClick={() => setMode('select')}
+                className="mb-8 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+
+              <div className="bg-white rounded-xl shadow-lg p-8">
+                <h2 className="text-3xl font-bold text-gray-800 mb-8">Import XML File</h2>
+                
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-16 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xml"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <div className="inline-block mb-4"><Upload /></div>
+                  <p className="text-gray-600 text-lg font-medium mb-2">Click to upload XML file</p>
+                  <p className="text-gray-500 text-sm">Upload a Moodle XML file to edit questions</p>
+                </div>
+
+                {questions.length > 0 && (
+                  <div className="mt-8">
+                    <p className="text-green-600 font-semibold mb-4">{questions.length} questions loaded</p>
+                    <button
+                      onClick={() => setMode('single')}
+                      className="w-full bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700"
+                    >
+                      Edit Questions
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        function TopicSelectors({ currentQuestion, setCurrentQuestion }) {
+          const papers = Object.keys(topicsData);
+          const mainTopics = currentQuestion.paper ? Object.keys(topicsData[currentQuestion.paper] || {}) : [];
+          const subTopic1List = currentQuestion.paper && currentQuestion.mainTopic 
+            ? topicsData[currentQuestion.paper]?.[currentQuestion.mainTopic]?.subTopic1List || []
+            : [];
+          const subTopic2List = subTopic1List.filter(s => s !== currentQuestion.subTopic1);
+
+          return (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Paper *</label>
+                <select
+                  value={currentQuestion.paper}
+                  onChange={(e) => setCurrentQuestion(prev => ({ ...prev, paper: e.target.value, mainTopic: '', subTopic1: '', subTopic2: '' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  <option value="">Select Paper</option>
+                  {papers.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Main Topic *</label>
+                <select
+                  value={currentQuestion.mainTopic}
+                  onChange={(e) => setCurrentQuestion(prev => ({ ...prev, mainTopic: e.target.value, subTopic1: '', subTopic2: '' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  disabled={!currentQuestion.paper}
+                >
+                  <option value="">Select Main Topic</option>
+                  {mainTopics.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sub Topic 1 *</label>
+                <select
+                  value={currentQuestion.subTopic1}
+                  onChange={(e) => setCurrentQuestion(prev => ({ ...prev, subTopic1: e.target.value, subTopic2: '' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  disabled={!currentQuestion.mainTopic}
+                >
+                  <option value="">Select Sub Topic 1</option>
+                  {subTopic1List.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sub Topic 2 (Optional)</label>
+                <select
+                  value={currentQuestion.subTopic2}
+                  onChange={(e) => setCurrentQuestion(prev => ({ ...prev, subTopic2: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  disabled={!currentQuestion.subTopic1}
+                >
+                  <option value="">Select Sub Topic 2</option>
+                  {subTopic2List.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </>
+          );
+        }
+
+        function generateMoodleXML(questions) {
+          let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<quiz>\n`;
+
+          questions.forEach(q => {
+            if (!q.imageBase64) return;
+
+            const questionName = q.idnumber;
+            const moodleImgSrc = `@@PLUGINFILE@@/${q.generatedImageFileName}`;
+            
+            const fractionA = q.correctAnswer === 'A' ? '100' : '0';
+            const fractionB = q.correctAnswer === 'B' ? '100' : '0';
+            const fractionC = q.correctAnswer === 'C' ? '100' : '0';
+            const fractionD = q.correctAnswer === 'D' ? '100' : '0';
+
+            let questionTextHtml = "";
+            if (q.mainTopic) questionTextHtml += `<p>Main Topic: ${q.mainTopic.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+            if (q.subTopic1) questionTextHtml += `<p>Sub Topic 1: ${q.subTopic1.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+            if (q.subTopic2 && q.subTopic2.trim()) {
+              questionTextHtml += `<p>Sub Topic 2: ${q.subTopic2.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+            }
+            questionTextHtml += `<p><img src="${moodleImgSrc}" alt="Question ${q.idnumber}" width="auto" height="auto" style="max-width: 100%;"></p>`;
+
+            xml += `  <question type="multichoice">\n`;
+            xml += `    <name><text>${questionName}</text></name>\n`;
+            xml += `    <questiontext format="html">\n`;
+            xml += `      <text><![CDATA[${questionTextHtml}]]></text>\n`;
+            xml += `      <file name="${q.generatedImageFileName}" path="/" encoding="base64">${q.imageBase64}</file>\n`;
+            xml += `    </questiontext>\n`;
+            xml += `    <generalfeedback format="html"><text></text></generalfeedback>\n`;
+            xml += `    <defaultgrade>1.0000000</defaultgrade>\n`;
+            xml += `    <penalty>0.3333333</penalty>\n`;
+            xml += `    <hidden>0</hidden>\n`;
+            xml += `    <idnumber>${q.idnumber}</idnumber>\n`;
+            
+            xml += `    <tags>\n`;
+            if (q.week) xml += `      <tag><text>Week_${q.week}</text></tag>\n`;
+            if (q.year) xml += `      <tag><text>Year_${q.year}</text></tag>\n`;
+            if (q.paper) {
+              const paperNumber = q.paper.replace(/Paper\s*/i, '').trim();
+              xml += `      <tag><text>Paper_${paperNumber}</text></tag>\n`;
+            }
+            if (q.mainTopic) xml += `      <tag><text>MainTopic_${q.mainTopic.replace(/\s+/g, '_')}</text></tag>\n`;
+            if (q.subTopic1) xml += `      <tag><text>SubTopic_${q.subTopic1.replace(/\s+/g, '_')}</text></tag>\n`;
+            if (q.subTopic2 && q.subTopic2.trim()) {
+              xml += `      <tag><text>SubTopic_${q.subTopic2.replace(/\s+/g, '_')}</text></tag>\n`;
+            }
+            xml += `    </tags>\n`;
+
+            xml += `    <single>true</single>\n`;
+            xml += `    <shuffleanswers>false</shuffleanswers>\n`;
+            xml += `    <answernumbering>ABCD</answernumbering>\n`;
+            xml += `    <showstandardinstruction>0</showstandardinstruction>\n`;
+            xml += `    <correctfeedback format="html"><text>Correct!</text></correctfeedback>\n`;
+            xml += `    <partiallycorrectfeedback format="html"><text>Partially correct.</text></partiallycorrectfeedback>\n`;
+            xml += `    <incorrectfeedback format="html"><text>Incorrect.</text></incorrectfeedback>\n`;
+            xml += `    <shownumcorrect/>\n`;
+            xml += `    <answer fraction="${fractionA}" format="html">\n      <text>A</text>\n      <feedback format="html"><text></text></feedback>\n    </answer>\n`;
+            xml += `    <answer fraction="${fractionB}" format="html">\n      <text>B</text>\n      <feedback format="html"><text></text></feedback>\n    </answer>\n`;
+            xml += `    <answer fraction="${fractionC}" format="html">\n      <text>C</text>\n      <feedback format="html"><text></text></feedback>\n    </answer>\n`;
+            xml += `    <answer fraction="${fractionD}" format="html">\n      <text>D</text>\n      <feedback format="html"><text></text></feedback>\n    </answer>\n`;
+            xml += `  </question>\n`;
+          });
+
+          xml += `</quiz>\n`;
+          return xml;
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
