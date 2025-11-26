@@ -1,3 +1,8 @@
+// Helper function to escape XML special characters
+function escapeXml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export function generateMoodleXML(questions) {
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<quiz>\n`;
 
@@ -13,10 +18,10 @@ export function generateMoodleXML(questions) {
     const fractionD = q.correctAnswer === 'D' ? '100' : '0';
 
     let questionTextHtml = "";
-    if (q.mainTopic) questionTextHtml += `<p>Main Topic: ${q.mainTopic.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
-    if (q.subTopic1) questionTextHtml += `<p>Sub Topic 1: ${q.subTopic1.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+    if (q.mainTopic) questionTextHtml += `<p>Main Topic: ${escapeXml(q.mainTopic)}</p>`;
+    if (q.subTopic1) questionTextHtml += `<p>Sub Topic 1: ${escapeXml(q.subTopic1)}</p>`;
     if (q.subTopic2 && q.subTopic2.trim()) {
-      questionTextHtml += `<p>Sub Topic 2: ${q.subTopic2.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+      questionTextHtml += `<p>Sub Topic 2: ${escapeXml(q.subTopic2)}</p>`;
     }
     questionTextHtml += `<p><img src="${moodleImgSrc}" alt="Question ${q.idnumber}" width="auto" height="auto" style="max-width: 100%;"></p>`;
 

@@ -1,5 +1,9 @@
+// Default compression settings
+const DEFAULT_MAX_WIDTH = 1200;
+const DEFAULT_QUALITY = 0.8;
+
 // Image compression utility
-export const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+export const compressImage = (file, maxWidth = DEFAULT_MAX_WIDTH, quality = DEFAULT_QUALITY) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {

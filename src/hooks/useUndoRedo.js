@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
 
+// Maximum number of history entries to keep
+const MAX_HISTORY_SIZE = 50;
+
 // Undo/Redo hook
 export const useUndoRedo = (initialState) => {
   const [state, setState] = useState(initialState);
@@ -9,8 +12,8 @@ export const useUndoRedo = (initialState) => {
   const updateState = useCallback((newState) => {
     const newHistory = history.slice(0, currentIndex + 1);
     newHistory.push(newState);
-    // Limit history to 50 entries
-    if (newHistory.length > 50) {
+    // Limit history to MAX_HISTORY_SIZE entries
+    if (newHistory.length > MAX_HISTORY_SIZE) {
       newHistory.shift();
     } else {
       setCurrentIndex(currentIndex + 1);
