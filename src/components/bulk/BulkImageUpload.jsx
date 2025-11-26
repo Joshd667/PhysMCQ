@@ -35,6 +35,53 @@ function BulkImageUpload({ bulkImages, setBulkImages, setBulkStage }) {
     }
   };
 
+  const handleMultipleImageUpload = async (files) => {
+    if (!files || files.length === 0) return;
+
+    // Convert FileList to array and filter for images
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
+    // Sort files by their original filename using alphanumeric sorting
+    imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+    setIsCompressing(true);
+    const processedImages = [];
+
+    try {
+      // Process each file sequentially to maintain order
+      for (const file of imageFiles) {
+        try {
+          const compressed = await compressImage(file);
+          processedImages.push({
+            file: compressed.file,
+            dataUrl: compressed.dataUrl,
+            name: file.name
+          });
+        } catch (error) {
+          console.error('Image compression failed:', error);
+          // Fallback to uncompressed
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          processedImages.push({
+            file,
+            dataUrl,
+            name: file.name
+          });
+        }
+      }
+
+      // Add all processed images to the bulk images list
+      setBulkImages(prev => [...prev, ...processedImages]);
+    } finally {
+      setIsCompressing(false);
+    }
+  };
+
   const handlePaste = useCallback((e) => {
     const items = e.clipboardData.items;
     for (let item of items) {
@@ -84,7 +131,8 @@ function BulkImageUpload({ bulkImages, setBulkImages, setBulkStage }) {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              onChange={(e) => handleImageUpload(e.target.files[0])}
+              multiple
+              onChange={(e) => handleMultipleImageUpload(e.target.files)}
               className="hidden"
             />
             {currentImage ? (
@@ -92,7 +140,7 @@ function BulkImageUpload({ bulkImages, setBulkImages, setBulkStage }) {
             ) : (
               <div>
                 <div className="inline-block mb-4"><Upload /></div>
-                <p className="text-gray-600 text-lg font-medium">Click to upload or paste image</p>
+                <p className="text-gray-600 text-lg font-medium">Click to upload images or paste image</p>
                 <p className="text-gray-500 text-sm mt-2">(Ctrl/Cmd + V)</p>
               </div>
             )}
